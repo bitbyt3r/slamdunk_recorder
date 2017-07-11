@@ -37,12 +37,13 @@ def record_video():
     while os.path.exists('data/vid{:03d}.h264'.format(num)):
       num += 1
     print("Recording video to data/vid{:03d}.h264".format(num))
-    camera.start_recording('data/vid{:03d}.h264'.format(num))
+    camera.start_recording('data/vid{:03d}.h264'.format(num), bitrate=25000000, motion_output='data/mot{:03}.h264'.format(num))
   
     while True:
       frame = camera.frame
       data = {
         "src": "video",
+        "num": num,
         "index": frame.index,
         "frame_type": frame.frame_type,
         "frame_timestamp": frame.timestamp,
@@ -51,28 +52,31 @@ def record_video():
         "position": frame.position
       }
       log(data)
-      camera.wait_recording(0.4/camera.framerate)
+      camera.wait_recording(1/camera.framerate)
     camera.stop_recording()
 
 def record_gps():
   gpsd.connect()
   while True:
-    data = gpsd.get_current()
-    log({
-      "src": "gps",
-      "time": time.time(),
-      "lat": data.lat,
-      "lon": data.lon,
-      "alt": data.alt,
-      "hspeed": data.hspeed,
-      "track": data.track,
-      "climb": data.climb,
-      "error": data.error,
-      "time": data.time,
-      "mode": data.mode,
-      "sats": data.sats,
-    })
-    time.sleep(0.1)
+    try:
+      data = gpsd.get_current()
+      log({
+        "src": "gps",
+        "time": time.time(),
+        "lat": data.lat,
+        "lon": data.lon,
+        "alt": data.alt,
+        "hspeed": data.hspeed,
+        "track": data.track,
+        "climb": data.climb,
+        "error": data.error,
+        "time": data.time,
+        "mode": data.mode,
+        "sats": data.sats,
+      })
+      time.sleep(0.1)
+    except Exception as e:
+      print("{}".format(e))
 
 def record_imu():
   bus = smbus.SMBus(1)
@@ -109,62 +113,64 @@ def record_imu():
     bus.write_byte_data(GYROSCOPE_ADDR, *i)
 
   while True:
-    status = bus.read_byte_data(COMPASS_ADDR, 0x09) #status reg
-    if status % 2:
-      #Compass reading is ready
-      data = []
-      for i in range(6):
-        data.append(bus.read_byte_data(COMPASS_ADDR, 0x03+i)) #0x03 is start of data registers
-      data = bytes(data)
-      x = struct.unpack('>h', data[:2])
-      y = struct.unpack('>h', data[2:4])
-      z = struct.unpack('>h', data[4:6])
-      log({
-        "src": "compass",
-        "time": time.time(),
-        "x": x,
-        "y": y,
-        "z": z,
-      })
+    try:
+      status = bus.read_byte_data(COMPASS_ADDR, 0x09) #status reg
+      if status % 2:
+        #Compass reading is ready
+        data = []
+        for i in range(6):
+          data.append(bus.read_byte_data(COMPASS_ADDR, 0x03+i)) #0x03 is start of data registers
+        data = bytes(data)
+        x = struct.unpack('>h', data[:2])
+        y = struct.unpack('>h', data[2:4])
+        z = struct.unpack('>h', data[4:6])
+        log({
+          "src": "compass",
+          "time": time.time(),
+          "x": x,
+          "y": y,
+          "z": z,
+        })
     
-    status = bus.read_byte_data(ACCELEROMETER_ADDR, 0x30) #Interrupt reg
-    status &= 0b10000000 #DATA_READY
-    if status:
-      data = []
-      for j in range(6):
-        data.append(bus.read_byte_data(ACCELEROMETER_ADDR, 0x32+j))
-      data = bytes(data)
-      x = struct.unpack('<h', data[:2])[0]
-      y = struct.unpack('<h', data[2:4])[0]
-      z = struct.unpack('<h', data[4:6])[0]*-1 #Chip is upside down...
-      log({
-        "src": "accel",
-        "time": time.time(),
-        "x": x,
-        "y": y,
-        "z": z,
-      })
+      status = bus.read_byte_data(ACCELEROMETER_ADDR, 0x30) #Interrupt reg
+      status &= 0b10000000 #DATA_READY
+      if status:
+        data = []
+        for j in range(6):
+          data.append(bus.read_byte_data(ACCELEROMETER_ADDR, 0x32+j))
+        data = bytes(data)
+        x = struct.unpack('<h', data[:2])[0]
+        y = struct.unpack('<h', data[2:4])[0]
+        z = struct.unpack('<h', data[4:6])[0]*-1 #Chip is upside down...
+        log({
+          "src": "accel",
+          "time": time.time(),
+          "x": x,
+          "y": y,
+          "z": z,
+        })
 
-    status = bus.read_byte_data(GYROSCOPE_ADDR, 0x1A) #Interrupt reg
-    if status % 2:
-      #gyro reading is ready
-      data = []
-      for j in range(8):
-        data.append(bus.read_byte_data(GYROSCOPE_ADDR, 0x1B+j))
-      data = bytes(data)
-      t = struct.unpack('>h', data[:2])[0]
-      x = struct.unpack('>h', data[2:4])[0]
-      y = struct.unpack('>h', data[4:6])[0]
-      z = struct.unpack('>h', data[6:8])[0]
-      log({
-        "src": "gyro",
-        "time": time.time(),
-        "temp": t,
-        "x": x,
-        "y": y,
-        "z": z,
-      })
-      
+      status = bus.read_byte_data(GYROSCOPE_ADDR, 0x1A) #Interrupt reg
+      if status % 2:
+        #gyro reading is ready
+        data = []
+        for j in range(8):
+          data.append(bus.read_byte_data(GYROSCOPE_ADDR, 0x1B+j))
+        data = bytes(data)
+        t = struct.unpack('>h', data[:2])[0]
+        x = struct.unpack('>h', data[2:4])[0]
+        y = struct.unpack('>h', data[4:6])[0]
+        z = struct.unpack('>h', data[6:8])[0]
+        log({
+          "src": "gyro",
+          "time": time.time(),
+          "temp": t,
+          "x": x,
+          "y": y,
+          "z": z,
+        })
+    except Exception as e:
+      print("{}".format(e))
       
 
 logger_thread = threading.Thread(target=logger)
