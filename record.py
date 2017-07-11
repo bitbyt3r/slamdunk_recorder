@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import threading
 import picamera
-import pynmea2
 import serial
 import queue
 import smbus
@@ -18,8 +17,8 @@ def logger():
       while not log_queue.empty():
         try:
           LOG.write(json.dumps(log_queue.get())+"\n")
-        except:
-          print("Failed to log!")
+        except Exception as e:
+          print("Failed to log: {}".format(e))
           break
 
 def log(data):
@@ -38,6 +37,7 @@ def record_video():
     while True:
       frame = camera.frame
       data = {
+        "source": "video",
         "index": frame.index,
         "frame_type": frame.frame_type,
         "frame_timestamp": frame.timestamp,
@@ -50,16 +50,15 @@ def record_video():
     camera.stop_recording()
 
 def record_gps():
-  pass
+  with serial.Serial('/dev/ttyS0') as port:
+    while True:
+      data = port.readline()
+      log({"source": "gps", "clock_timestamp": time.time(), "data": data.decode('UTF-8')})
 
 def record_imu():
-  pass
-
-#  bus = smbus.SMBus(1)
-#  bus.write_byte_data(DEVICE_ADDRESS, DEVICE_REG_MODE1, 0x80)
-#  ledout_values = [0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
-#  bus.write_i2c_block_data(DEVICE_ADDRESS, DEVICE_REG_LEDOUT0, ledout_values)
-
+  bus = smbus.SMBus(1)
+  while True:
+    time.sleep(1)
 
 logger_thread = threading.Thread(target=logger)
 logger_thread.start()
@@ -69,6 +68,4 @@ gps_thread = threading.Thread(target=record_gps)
 gps_thread.start()
 imu_thread = threading.Thread(target=record_imu)
 imu_thread.start()
-print("Now running!")
-time.sleep(10)
-sys.exit("That's all folks")
+print("Capturing data...")
