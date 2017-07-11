@@ -1,13 +1,17 @@
 #!/usr/bin/python3
 import threading
 import picamera
-import serial
 import queue
 import smbus
+import gpsd
 import time
 import json
 import sys
 import os
+
+COMPASS_ADDR = 0x1e
+ACCELEROMETER_ADDR = 0
+GYROSCOPE_ADDR = 20
 
 log_queue = queue.Queue(maxsize=4096)
 
@@ -50,10 +54,24 @@ def record_video():
     camera.stop_recording()
 
 def record_gps():
-  with serial.Serial('/dev/ttyS0') as port:
-    while True:
-      data = port.readline()
-      log({"source": "gps", "clock_timestamp": time.time(), "data": data.decode('UTF-8')})
+  gpsd.connect()
+  while True:
+    data = gpsd.get_current()
+    log({
+      "source": "gps",
+      "clock_timestamp": time.time(),
+      "lat": data.lat,
+      "lon": data.lon,
+      "alt": data.alt,
+      "hspeed": data.hspeed,
+      "track": data.track,
+      "climb": data.climb,
+      "error": data.error,
+      "time": data.time,
+      "mode": data.mode,
+      "sats": data.sats,
+    })
+    time.sleep(0.1)
 
 def record_imu():
   bus = smbus.SMBus(1)
