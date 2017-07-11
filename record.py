@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import threading
 import picamera
+import struct
 import queue
 import smbus
 import gpsd
@@ -10,8 +11,8 @@ import sys
 import os
 
 COMPASS_ADDR = 0x1e
-ACCELEROMETER_ADDR = 0
-GYROSCOPE_ADDR = 20
+ACCELEROMETER_ADDR = 0x53
+GYROSCOPE_ADDR = 0x68
 
 log_queue = queue.Queue(maxsize=4096)
 
@@ -75,8 +76,32 @@ def record_gps():
 
 def record_imu():
   bus = smbus.SMBus(1)
+  # Datasheet: http://www.soc-robotics.com/pdfs/HMC5883L.pdf
+  compass_config = [
+    (0x00, 0b01111000), #Config reg A, 8xavg, 75Hz output rate, normal bias
+    (0x01, 0b00100000), #Config reg B, +/- 1.3 Ga
+    (0x02, 0b00000000), #Mode reg, continuous mode
+  ]
+  for i in compass_config:
+    bus.write_byte_data(COMPASS_ADDR, *i)
   while True:
-    time.sleep(1)
+    status = bus.read_byte_data(COMPASS_ADDR, 0x09)
+    if status % 2:
+      #Compass reading is ready
+      data = []
+      for i in range(6):
+        data.append(bus.read_byte_data(COMPASS_ADDR, 0x03+i)) #0x03 is start of data registers
+      data = bytes(data)
+      x = struct.unpack('>h', data[:2])
+      y = struct.unpack('>h', data[2:4])
+      z = struct.unpack('>h', data[4:6])
+      log({
+        "source": "compass",
+        "clock_timestamp": time.time(),
+        "x": x,
+        "y": y,
+        "z": z,
+      })
 
 logger_thread = threading.Thread(target=logger)
 logger_thread.start()
