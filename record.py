@@ -42,11 +42,11 @@ def record_video():
     while True:
       frame = camera.frame
       data = {
-        "source": "video",
+        "src": "video",
         "index": frame.index,
         "frame_type": frame.frame_type,
         "frame_timestamp": frame.timestamp,
-        "clock_timestamp": time.time(),
+        "time": time.time(),
         "complete": frame.complete,
         "position": frame.position
       }
@@ -59,8 +59,8 @@ def record_gps():
   while True:
     data = gpsd.get_current()
     log({
-      "source": "gps",
-      "clock_timestamp": time.time(),
+      "src": "gps",
+      "time": time.time(),
       "lat": data.lat,
       "lon": data.lon,
       "alt": data.alt,
@@ -120,8 +120,8 @@ def record_imu():
       y = struct.unpack('>h', data[2:4])
       z = struct.unpack('>h', data[4:6])
       log({
-        "source": "compass",
-        "clock_timestamp": time.time(),
+        "src": "compass",
+        "time": time.time(),
         "x": x,
         "y": y,
         "z": z,
@@ -138,8 +138,8 @@ def record_imu():
       y = struct.unpack('<h', data[2:4])[0]
       z = struct.unpack('<h', data[4:6])[0]*-1 #Chip is upside down...
       log({
-        "source": "accelerometer",
-        "clock_timestamp": time.time(),
+        "src": "accel",
+        "time": time.time(),
         "x": x,
         "y": y,
         "z": z,
@@ -157,8 +157,8 @@ def record_imu():
       y = struct.unpack('>h', data[4:6])[0]
       z = struct.unpack('>h', data[6:8])[0]
       log({
-        "source": "gyro",
-        "clock_timestamp": time.time(),
+        "src": "gyro",
+        "time": time.time(),
         "temp": t,
         "x": x,
         "y": y,
